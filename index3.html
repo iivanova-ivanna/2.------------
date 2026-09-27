@@ -20,6 +20,7 @@
   <div class="back-link" id="back-link">← Ко всем постам</div>
 
   <div class="post">
+    <img id="post-image" class="post-image" />
     <p id="post-text"></p>
     <button id="like-btn">🤍</button>
     <span id="likes-count"></span> лайков
@@ -87,6 +88,7 @@ function renderPosts(posts) {
     const div = document.createElement("div");
     div.className = "post-card";
     div.innerHTML = `
+      <img src="${p.imageUrl}" class="post-thumb" />
       <div>${p.text}</div>
       <div class="meta">❤️ ${p.likesCount} · 💬 ${p.commentsCount}</div>
     `;
@@ -133,7 +135,7 @@ async function loadCurrentPost() {
     showPostsScreen();
     return;
   }
-
+  document.getElementById("post-image").src = post.imageUrl; // ← новая строка
   postTextEl.textContent = post.text;
   likesCountEl.textContent = post.likesCount;
   isLiked = post.isLikedByMe;
