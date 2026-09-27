@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Демо: лайк и комментарии к посту</title>
+<style>
+  /* Общие стили страницы — просто оформление, не влияет на логику */
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+  .post { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  button { font-size: 20px; cursor: pointer; border: none; background: none; }
+  .liked { color: red; }
+  .not-liked { color: #999; }
+
+  .comments { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+  .comments h3 { margin: 0 0 10px; font-size: 15px; }
+  .comment {
+    padding: 8px 10px; font-size: 14px; background: #f7f7f7;
+    border-radius: 6px; margin-bottom: 6px;
+  }
+  .comment b { color: #333; }
+
+  .comment-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .comment-form input { padding: 6px; }
+  .comment-form button {
+    font-size: 14px; padding: 6px 12px; background: #333; color: white;
+    border-radius: 4px; align-self: flex-start;
+  }
+</style>
+</head>
+<body>
+
+<h2>Пост</h2>
+<div class="post">
+  <!-- Эти элементы изначально пустые — текст, число лайков и список
+       комментариев подставит JavaScript после ответа сервера -->
+  <p id="post-text"></p>
+  <button id="like-btn">🤍</button>
+  <span id="likes-count"></span> лайков
+
+  <div class="comments">
+    <h3>Комментарии</h3>
+    <div id="comments-list"></div>
+
+    <!-- Форма без тега <form> и без submit — вместо этого просто
+         кнопка с обработчиком клика ниже в JS -->
+    <div class="comment-form">
+      <input id="name-input" type="text" placeholder="Ваше имя" />
+      <input id="comment-input" type="text" placeholder="Написать комментарий..." />
+      <button id="comment-submit">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== НАСТРОЙКИ =====
+
+// Базовый адрес API. Меняйте на IP того, чей бэкенд запущен, когда
+// подключаетесь не к своему компьютеру, а к чужому в сети.
+const API_BASE = "http://localhost:8000";
+
+// id поста, с которым работает вся страница. Зашит жёстко для демо —
+// в реальном приложении обычно берётся из URL страницы
+const POST_ID = 17;
+
+// Как часто опрашивать сервер на предмет новых комментариев (в мс).
+// Это называется "polling" — простой, но не самый эффективный способ
+// увидеть чужие изменения без ручного обновления страницы.
+const POLL_INTERVAL_MS = 2000;
+
+
+// ===== ССЫЛКИ НА DOM-ЭЛЕМЕНТЫ =====
+// Получаем элементы один раз при загрузке скрипта, чтобы не искать
+// их в DOM заново при каждом действии
+const likeBtn = document.getElementById("like-btn");
+const likesCountEl = document.getElementById("likes-count");
+const postTextEl = document.getElementById("post-text");
+const commentsListEl = document.getElementById("comments-list");
+const nameInputEl = document.getElementById("name-input");
+const commentInputEl = document.getElementById("comment-input");
+const commentSubmitBtn = document.getElementById("comment-submit");
+
+
+// ===== СОСТОЯНИЕ =====
+// Хранит, лайкнул ли текущий пользователь пост. Обновляется только
+// после ответа сервера — фронтенд сам ничего не решает, а просто
+// отражает то, что вернул бэкенд
+let isLiked = false;
+
+
+// ===== ФУНКЦИИ ОТРИСОВКИ (меняют то, что видно на экране) =====
+
+// Меняет эмодзи на кнопке в зависимости от isLiked
+function renderLikeButton() {
+  likeBtn.textContent = isLiked ? "❤️" : "🤍";
+}
+
+// Перерисовывает список комментариев с нуля на основе массива с сервера
+function renderComments(comments) {
+  commentsListEl.innerHTML = ""; // очищаем перед тем, как рисовать заново
+
+  if (comments.length === 0) {
+    commentsListEl.innerHTML = "<div style='color:#999'>Пока нет комментариев</div>";
+    return;
+  }
+
+  comments.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "comment";
+    div.innerHTML = `<b>${c.author}:</b> ${c.text}`;
+    commentsListEl.appendChild(div);
+  });
+}
+
+
+// ===== ЗАПРОСЫ К СЕРВЕРУ =====
+
+// Загружает данные поста: текст, число лайков, лайкнул ли я
+async function loadPost() {
+  const res = await fetch(`${API_BASE}/api/posts`);
+  const data = await res.json(); // список ВСЕХ постов
+
+  // находим среди всех постов именно тот, с которым работает страница
+  const post = data.find(p => p.id === POST_ID);
+
+  postTextEl.textContent = post.text;
+  likesCountEl.textContent = post.likesCount;
+  isLiked = post.isLikedByMe;
+  renderLikeButton();
+}
+
+// Загружает список комментариев к посту и обновляет их на экране
+async function loadComments() {
+  const res = await fetch(`${API_BASE}/api/posts/${POST_ID}/comments`);
+  const data = await res.json();
+  renderComments(data);
+}
+
+
+// ===== ОБРАБОТЧИКИ ДЕЙСТВИЙ ПОЛЬЗОВАТЕЛЯ =====
+
+// Клик по лайку — переключаем состояние: если уже лайкнуто, снимаем
+// лайк через DELETE, если нет — ставим через POST
+likeBtn.addEventListener("click", async () => {
+  const method = isLiked ? "DELETE" : "POST";
+
+  const res = await fetch(`${API_BASE}/api/posts/${POST_ID}/like`, { method });
+  const data = await res.json();
+
+  // сервер возвращает актуальное состояние — просто отображаем его,
+  // не считаем "+1" на фронтенде самостоятельно
+  likesCountEl.textContent = data.likesCount;
+  isLiked = data.isLikedByMe;
+  renderLikeButton();
+});
+
+// Клик по кнопке "Отправить" под формой комментария
+commentSubmitBtn.addEventListener("click", async () => {
+  const author = nameInputEl.value.trim();
+  const text = commentInputEl.value.trim();
+
+  // Простая проверка на фронтенде до отправки запроса —
+  // не гоняем на сервер заведомо некорректные данные
+  if (!author) {
+    alert("Введите имя");
+    return;
+  }
+  if (!text) {
+    alert("Введите текст комментария");
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/api/posts/${POST_ID}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }, // говорим серверу, что тело в формате JSON
+    body: JSON.stringify({ text, author }),           // превращаем объект JS в JSON-строку
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    commentInputEl.value = "";
+    loadComments(); // сразу подтягиваем обновлённый список себе
+  } else {
+    // res.ok === false, если сервер ответил кодом 4xx/5xx
+    alert("Ошибка: " + JSON.stringify(data));
+  }
+});
+
+
+// ===== ЗАПУСК ПРИ ОТКРЫТИИ СТРАНИЦЫ =====
+
+loadPost();     // подтягиваем данные поста один раз при загрузке
+loadComments(); // подтягиваем комментарии один раз при загрузке
+
+// Периодически перезапрашиваем комментарии — так чужие комментарии
+// (написанные в другом браузере/с другого компьютера) появятся сами,
+// без перезагрузки страницы.
+setInterval(loadComments, POLL_INTERVAL_MS);
+</script>
+
+</body>
+</html>

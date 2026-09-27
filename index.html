@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Демо: лайк к посту</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+  .post { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  button { font-size: 20px; cursor: pointer; border: none; background: none; }
+  .liked { color: red; }
+  .not-liked { color: #999; }
+  #log { background: #111; color: #0f0; font-family: monospace; padding: 12px;
+         border-radius: 8px; height: 260px; overflow-y: auto; font-size: 13px; }
+  .log-line { margin-bottom: 8px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h2>Пост</h2>
+<div class="post">
+  <p id="post-text"></p>
+  <button id="like-btn">🤍</button>
+  <span id="likes-count"></span> лайков
+</div>
+
+<h3>Лог запросов и ответов</h3>
+<div id="log"></div>
+
+<script>
+const API_URL = "http://localhost:8000/api/posts";
+const POST_ID = 17;
+
+const likeBtn = document.getElementById("like-btn");
+const likesCountEl = document.getElementById("likes-count");
+const postTextEl = document.getElementById("post-text");
+const logEl = document.getElementById("log");
+
+let isLiked = false;
+
+function log(message) {
+  const line = document.createElement("div");
+  line.className = "log-line";
+  line.textContent = message;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderLikeButton() {
+  likeBtn.textContent = isLiked ? "❤️" : "🤍";
+}
+
+// Загружаем пост при открытии страницы
+async function loadPost() {
+  log(`→ GET ${API_URL}`);
+  const res = await fetch(API_URL);
+  const data = await res.json();
+  log(`← ${res.status} ${JSON.stringify(data)}`);
+
+  const post = data.find(p => p.id === POST_ID);
+  postTextEl.textContent = post.text;
+  likesCountEl.textContent = post.likesCount;
+  isLiked = post.isLikedByMe;
+  renderLikeButton();
+}
+
+// Клик по лайку — переключаем состояние
+likeBtn.addEventListener("click", async () => {
+  const method = isLiked ? "DELETE" : "POST";
+  const url = `${API_URL}/${POST_ID}/like`;
+
+  log(`→ ${method} ${url}`);
+  const res = await fetch(url, { method });
+  const data = await res.json();
+  log(`← ${res.status} ${JSON.stringify(data)}`);
+
+  likesCountEl.textContent = data.likesCount;
+  isLiked = data.isLikedByMe;
+  renderLikeButton();
+});
+
+loadPost();
+</script>
+
+</body>
+</html>

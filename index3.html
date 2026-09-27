@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Демо: посты, лайки и комментарии</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+
+  .post-card {
+    border: 1px solid #ddd; border-radius: 8px; padding: 14px;
+    margin-bottom: 10px; cursor: pointer;
+  }
+  .post-card:hover { background: #f5f5f5; }
+  .post-card .meta { color: #999; font-size: 13px; margin-top: 6px; }
+
+  .post { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .back-link { display: inline-block; margin-bottom: 12px; cursor: pointer; color: #06c; }
+
+  button { font-size: 20px; cursor: pointer; border: none; background: none; }
+
+  .comments { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+  .comments h3 { margin: 0 0 10px; font-size: 15px; }
+  .comment {
+    padding: 8px 10px; font-size: 14px; background: #f7f7f7;
+    border-radius: 6px; margin-bottom: 6px;
+  }
+  .comment b { color: #333; }
+
+  .comment-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .comment-form input { padding: 6px; }
+  .comment-form button {
+    font-size: 14px; padding: 6px 12px; background: #333; color: white;
+    border-radius: 4px; align-self: flex-start;
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ЭКРАН 1: список всех постов -->
+<div id="posts-screen">
+  <h2>Посты</h2>
+  <div id="posts-list"></div>
+</div>
+
+<!-- ЭКРАН 2: открытый пост с лайком и комментариями (скрыт по умолчанию) -->
+<div id="post-screen" class="hidden">
+  <div class="back-link" id="back-link">← Ко всем постам</div>
+
+  <div class="post">
+    <p id="post-text"></p>
+    <button id="like-btn">🤍</button>
+    <span id="likes-count"></span> лайков
+
+    <div class="comments">
+      <h3>Комментарии</h3>
+      <div id="comments-list"></div>
+
+      <div class="comment-form">
+        <input id="name-input" type="text" placeholder="Ваше имя" />
+        <input id="comment-input" type="text" placeholder="Написать комментарий..." />
+        <button id="comment-submit">Отправить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:8000";
+const POLL_INTERVAL_MS = 2000;
+
+// currentPostId хранит id того поста, который сейчас открыт.
+// null означает "мы на экране списка"
+let currentPostId = null;
+let isLiked = false;
+
+// ===== ССЫЛКИ НА ЭЛЕМЕНТЫ =====
+const postsScreenEl = document.getElementById("posts-screen");
+const postScreenEl = document.getElementById("post-screen");
+const postsListEl = document.getElementById("posts-list");
+const backLinkEl = document.getElementById("back-link");
+
+const likeBtn = document.getElementById("like-btn");
+const likesCountEl = document.getElementById("likes-count");
+const postTextEl = document.getElementById("post-text");
+const commentsListEl = document.getElementById("comments-list");
+const nameInputEl = document.getElementById("name-input");
+const commentInputEl = document.getElementById("comment-input");
+const commentSubmitBtn = document.getElementById("comment-submit");
+
+
+// ===== ПЕРЕКЛЮЧЕНИЕ МЕЖДУ ЭКРАНАМИ =====
+
+function showPostsScreen() {
+  currentPostId = null;
+  postScreenEl.classList.add("hidden");
+  postsScreenEl.classList.remove("hidden");
+  loadPosts();
+}
+
+function showPostScreen(postId) {
+  currentPostId = postId;
+  postsScreenEl.classList.add("hidden");
+  postScreenEl.classList.remove("hidden");
+  loadCurrentPost();
+  loadComments();
+}
+
+
+// ===== ЭКРАН СПИСКА ПОСТОВ =====
+
+function renderPosts(posts) {
+  postsListEl.innerHTML = "";
+  posts.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "post-card";
+    div.innerHTML = `
+      <div>${p.text}</div>
+      <div class="meta">❤️ ${p.likesCount} · 💬 ${p.commentsCount}</div>
+    `;
+    // По клику на карточку открываем этот конкретный пост
+    div.addEventListener("click", () => showPostScreen(p.id));
+    postsListEl.appendChild(div);
+  });
+}
+
+async function loadPosts() {
+  const res = await fetch(`${API_BASE}/api/posts`);
+  const data = await res.json();
+  renderPosts(data);
+}
+
+
+// ===== ЭКРАН ОДНОГО ПОСТА (лайк + комментарии) =====
+
+function renderLikeButton() {
+  likeBtn.textContent = isLiked ? "❤️" : "🤍";
+}
+
+function renderComments(comments) {
+  commentsListEl.innerHTML = "";
+  if (comments.length === 0) {
+    commentsListEl.innerHTML = "<div style='color:#999'>Пока нет комментариев</div>";
+    return;
+  }
+  comments.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "comment";
+    div.innerHTML = `<b>${c.author}:</b> ${c.text}`;
+    commentsListEl.appendChild(div);
+  });
+}
+
+// Находит текущий пост среди всех постов и отображает его данные
+async function loadCurrentPost() {
+  const res = await fetch(`${API_BASE}/api/posts`);
+  const data = await res.json();
+
+  const post = data.find(p => p.id === currentPostId);
+  if (!post) {
+    showPostsScreen();
+    return;
+  }
+
+  postTextEl.textContent = post.text;
+  likesCountEl.textContent = post.likesCount;
+  isLiked = post.isLikedByMe;
+  renderLikeButton();
+}
+
+async function loadComments() {
+  if (currentPostId === null) return;
+
+  const res = await fetch(`${API_BASE}/api/posts/${currentPostId}/comments`);
+  const data = await res.json();
+  renderComments(data);
+}
+
+backLinkEl.addEventListener("click", showPostsScreen);
+
+likeBtn.addEventListener("click", async () => {
+  const method = isLiked ? "DELETE" : "POST";
+  const res = await fetch(`${API_BASE}/api/posts/${currentPostId}/like`, { method });
+  const data = await res.json();
+
+  likesCountEl.textContent = data.likesCount;
+  isLiked = data.isLikedByMe;
+  renderLikeButton();
+});
+
+commentSubmitBtn.addEventListener("click", async () => {
+  const author = nameInputEl.value.trim();
+  const text = commentInputEl.value.trim();
+
+  if (!author) {
+    alert("Введите имя");
+    return;
+  }
+  if (!text) {
+    alert("Введите текст комментария");
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/api/posts/${currentPostId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, author }),
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    commentInputEl.value = "";
+    loadComments();
+  } else {
+    alert("Ошибка: " + JSON.stringify(data));
+  }
+});
+
+
+// ===== ЗАПУСК =====
+
+showPostsScreen(); // при открытии страницы стартуем с экрана списка
+
+setInterval(() => {
+  if (currentPostId === null) {
+    loadPosts();
+  } else {
+    loadComments();
+  }
+}, POLL_INTERVAL_MS);
+</script>
+
+</body>
+</html>
