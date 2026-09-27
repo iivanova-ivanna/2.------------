@@ -13,9 +13,9 @@ app.add_middleware(
 
 # "База данных" прямо в памяти — несколько постов
 posts = {
-    17: {"id": 17, "text": "Мой первый пост", "likesCount": 3, "likedBy": set(), "comments": []},
-    18: {"id": 18, "text": "Изучаю FastAPI, это интересно!", "likesCount": 0, "likedBy": set(), "comments": []},
-    19: {"id": 19, "text": "Сегодня разбирали клиент-серверную архитектуру", "likesCount": 1, "likedBy": set(), "comments": []},
+    17: {"id": 17, "text": "Мой первый пост", "imageUrl": "https://images.pexels.com/photos/39315274/pexels-photo-39315274.jpeg", "likesCount": 3, "likedBy": set(), "comments": []},
+    18: {"id": 18, "text": "Изучаю FastAPI, это интересно!", "imageUrl": "https://images.pexels.com/photos/19227922/pexels-photo-19227922.jpeg", "likesCount": 0, "likedBy": set(), "comments": []},
+    19: {"id": 19, "text": "Сегодня разбирали клиент-серверную архитектуру", "imageUrl": "https://images.pexels.com/photos/39226797/pexels-photo-39226797.jpeg", "likesCount": 1, "likedBy": set(), "comments": []},
 }
 
 next_comment_id = 1
@@ -32,6 +32,7 @@ def get_posts(username: str = "anonymous"):
         {
             "id": p["id"],
             "text": p["text"],
+            "imageUrl": p["imageUrl"],   # ← новая строка
             "likesCount": p["likesCount"],
             "isLikedByMe": username in p["likedBy"],
             "commentsCount": len(p["comments"]),
